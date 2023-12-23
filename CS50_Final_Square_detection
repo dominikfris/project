@@ -1,0 +1,117 @@
+import cv2
+import numpy as np
+import time
+import pyautogui
+import os
+import tkinter as tk
+
+def find_squares(image, min_square_area):
+    # Convert Image to grayscale
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    
+    # GaussianBlu
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    
+    # Edge detection
+    edges = cv2.Canny(blurred, 50, 150)
+    
+    contours, _ = cv2.findContours(edges.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    squares = []
+    for cnt in contours:
+        # Approximate the contour with a polygon
+        epsilon = 0.035 * cv2.arcLength(cnt, True)
+        approx = cv2.approxPolyDP(cnt, epsilon, True)
+        
+        # If polygon has 4 edges it is a square
+        if len(approx) == 4 and cv2.isContourConvex(approx):
+            area = cv2.contourArea(approx)
+            # Check the size of the square
+            if area > min_square_area:
+                squares.append(approx)
+    
+    return squares
+
+def draw_squares(image, squares, screenshot_path):
+    # Square outline
+    if len(squares) == 3:
+        #  Change square outline if three squares are detectdd
+        color = (0, 255, 0)
+        
+    
+        cv2.drawContours(image, squares, -1, color, 2)
+        cv2.putText(image, 'Three objects detected!', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2, cv2.LINE_AA)
+        cv2.imshow('Square Detection', image)
+
+        # Take a screenshot
+        screenshot = pyautogui.screenshot()
+        screenshot_path = os.path.join(os.getcwd(), 'screenshot.png')
+        screenshot.save(screenshot_path)
+        
+        # Press Q to turn off the program
+        cv2.waitKey(0)
+        cv2.destroyWindow('Square Detection')  
+    else:
+        color = (0, 0, 255) 
+        cv2.drawContours(image, squares, -1, color, 2)
+
+
+def ask_start_simulation():
+    window = tk.Tk()
+    window.title("Simulation Start")
+
+    result_var = tk.BooleanVar()
+    result_var.set(False)
+
+    label = tk.Label(window, text="Chces zacat simulaciu?")
+    label.pack(pady=10)
+
+    yes_button = tk.Button(window, text="Ano", command=lambda: start_simulation_callback(result_var, window))
+    yes_button.pack(side="left", padx=20)
+
+    no_button = tk.Button(window, text="Nie", command=lambda: abort_simulation_callback(result_var, window))
+    no_button.pack(side="right", padx=20)
+
+    window.protocol("WM_DELETE_WINDOW", lambda: abort_simulation_callback(result_var, window))
+    window.geometry("300x100")
+    window.mainloop()
+
+    return result_var.get()
+
+def start_simulation_callback(result_var, window):
+    result_var.set(True)
+    window.destroy()
+
+def abort_simulation_callback(result_var, window):
+    result_var.set(False)
+    window.destroy()
+
+start_simulation = ask_start_simulation()
+
+if not start_simulation:
+    print("Simulacia zrusena.")
+    exit()
+
+# Camera modul activation
+cap = cv2.VideoCapture(0)
+
+min_square_area = 400 
+screenshot_path = ''
+
+while True:
+    # Read frames
+    ret, frame = cap.read()
+    
+    
+    squares = find_squares(frame, min_square_area)
+    
+    draw_squares(frame, squares, screenshot_path)
+    
+    cv2.imshow('Square Detection', frame)
+    
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
